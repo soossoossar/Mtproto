@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MTProto Nexus | استخراج‌گر پروکسی تلگرام</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Orbitron:wght@500;700;900&family=Vazirmatn:wght@300;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        /* --- 1. Variables & Reset --- */
+        :root {
+            --neon-primary: #00f3ff; /* Cyber Cyan */
+            --neon-secondary: #bc13fe; /* Electric Purple */
+            --neon-accent: #ccff00; /* Acid Green */
+            --bg-dark: #050505;
+            --glass-bg: rgba(20, 20, 30, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-main: #e0e0e0;
+            --text-dim: #94a3b8;
+            --font-tech: 'Orbitron', sans-serif;
+            --font-body: 'Vazirmatn', 'Inter', sans-serif;
+            --card-glow: 0 0 20px rgba(0, 243, 255, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: var(--font-body);
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            overflow-x: hidden;
+            min-height: 100vh;
+            position: relative;
+            /* افکت پرسپکتیو عمیق برای حس سه بعدی */
+            perspective: 1200px; 
+            overflow: hidden; /* جلوگیری از اسکرول اضافه */
+        }
+
+        /* --- 2. Dynamic Background (Three.js Canvas) --- */
+        #three-canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: -1; /* پشت همه چیز */
+            background: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+        }
+
+        .vignette {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 40%, #000000 100%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* --- 3. 3D Layout Tilt & Animation --- */
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+            /* زاویه دادن به کل صفحه برای اینکه افکت موج بهتر دیده شود */
+            transform-style: preserve-3d;
+            transform: perspective(1000px) rotateX(5deg) rotateY(-2deg);
+            transition: transform 0.1s ease-out;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--glass-border);
+            border-radius: 0 0 30px 30px;
+            animation: fadeInDown 1s ease-out, floatText 6s ease-in-out infinite;
+            transform-style: preserve-3d;
+        }
+
+        h1 {
+            font-family: var(--font-tech);
+            font-size: 2.5rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, #fff, var(--neon-primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+            /* جدا کردن متن از پس زمینه با زد */
+            transform: translateZ(20px);
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+            transform: translateZ(10px);
+        }
+
+        /* --- 4. Controls --- */
+        .controls-wrapper {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+            flex-wrap: wrap;
+            transform-style: preserve-3d;
+            transform: translateZ(15px);
+        }
+
+        .cyber-btn {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--neon-primary);
+            color: var(--neon-primary);
+            padding: 12px 30px;
+            font-family: var(--font-tech);
+            font-size: 0.9rem;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+            text-transform: uppercase;
+        }
+
+        .cyber-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: var(--neon-primary);
+            transition: 0.3s;
+            z-index: -1;
+        }
+
+        .cyber-btn:hover::before { left: 0; }
+        .cyber-btn:hover { color: #000; box-shadow: 0 0 25px var(--neon-primary); transform: translateZ(5px); }
+
+        .cyber-btn.active {
+            background: var(--neon-primary);
+            color: #000;
+            box-shadow: 0 0 15px var(--neon-primary);
+        }
+
+        /* --- 5. Grid & Cards --- */
+        .proxy-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            perspective: 1000px;
+            transform-style: preserve-3d;
+        }
+
+        .mtproto-card {
+            background: rgba(10, 10, 15, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            opacity: 0;
+            transform: translateY(50px) translateZ(0);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            height: 200px;
+            
+            /* انیمیشن موج برای کارت‌ها */
+            animation: cardEntry 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards, floatCard 5s ease-in-out infinite;
+        }
+
+        /* Holographic Border Effect */
+        .mtproto-card::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: conic-gradient(transparent, transparent, transparent, var(--neon-secondary));
+            animation: rotate 4s linear infinite;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .mtproto-card:hover::before { opacity: 0.5; }
+        
+        .mtproto-card::after {
+            content: '';
+            position: absolute;
+            inset: 2px;
+            background: #0f0f13;
+            border-radius: 14px;
+            z-index: -1;
+        }
+
+        .mtproto-card:hover {
+            transform: translateY(-10px) scale(1.02) translateZ(20px);
+            border-color: var(--neon-secondary);
+            box-shadow: 0 10px 40px rgba(188, 19, 254, 0.2);
+        }
+
+        .card-header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+        }
+
+        .source-badge {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: var(--neon-accent);
+            font-weight: bold;
+        }
+
+        /* The MTProto Button */
+        .mtproto-link-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 80px;
+            background: linear-gradient(135deg, rgba(0,243,255,0.1), rgba(188,19,254,0.1));
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--neon-primary);
+            font-family: var(--font-tech);
+            font-size: 1.2rem;
+            font-weight: 900;
+            letter-spacing: 1px;
+            position: relative;
+            transition: all 0.3s;
+            overflow: hidden;
+        }
+
+        .mtproto-link-btn:hover {
+            background: var(--neon-primary);
+            color: #000;
+            box-shadow: 0 0 30px var(--neon-primary);
+        }
+
+        .mtproto-link-btn i { font-size: 1.5rem; margin-left: 10px; }
+
+        .card-actions {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+
+        .action-icon {
+            color: var(--text-dim);
+            cursor: pointer;
+            transition: color 0.3s;
+            padding: 5px;
+        }
+        .action-icon:hover { color: #fff; }
+        
+        .copy-trigger:hover { color: var(--neon-accent); }
+
+        /* --- 6. Animations --- */
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes rotate { 100% { transform: rotate(360deg); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        @keyframes cardEntry { from { opacity: 0; transform: translateY(50px) scale(0.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+        /* انیمیشن تکان خوردن خودکار (مثل موج) */
+        @keyframes floatText {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        @keyframes floatCard {
+            0%, 100% { transform: translateY(0) translateZ(0); }
+            50% { transform: translateY(-10px) translateZ(10px); }
+        }
+
+        /* --- 7. Loader & Toasts --- */
+        .loader-container {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: center;
+            padding: 4rem;
+            z-index: 10;
+        }
+
+        .cyber-loader {
+            width: 60px; height: 60px;
+            border: 4px solid transparent;
+            border-top: 4px solid var(--neon-primary);
+            border-right: 4px solid var(--neon-secondary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            box-shadow: 0 0 15px var(--neon-primary);
+        }
+
+        .toast-box {
+            position: fixed;
+            bottom: 20px; right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid var(--neon-accent);
+            color: var(--neon-accent);
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-family: var(--font-tech);
+            transform: translateX(200%);
+            transition: transform 0.4s ease;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 0 20px rgba(204, 255, 0, 0.2);
+        }
+        .toast-box.show { transform: translateX(0); }
+
+    </style>
+</head>
+<body>
+
+    <!-- Three.js Canvas acts as the Background Wave -->
+    <canvas id="three-canvas"></canvas>
+    <div class="vignette"></div>
+
+    <div class="app-container">
+        <header>
+            <h1>Nexus MTProto</h1>
+            <p class="subtitle">اتصال ایمن و سریع به شبکه تلگرام | استخراج هوشمند از کانال‌های معتبر</p>
+            
+            <div class="controls-wrapper">
+                <button class="cyber-btn" id="refresh-btn" onclick="fetchProxies()">
+                    <i class="fa-solid fa-rotate" id="refresh-icon"></i> به‌روزرسانی لحظه‌ای
+                </button>
+                <div style="display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 0.8rem;">
+                    <i class="fa-solid fa-server"></i> تعداد پروکسی‌ها: <span id="count-display" style="color: var(--neon-primary)">0</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="proxy-grid" id="grid">
+            <!-- Proxies will be injected here -->
+            <div class="loader-container">
+                <div class="cyber-loader"></div>
+            </div>
+        </main>
+    </div>
+
+    <div class="toast-box" id="toast">
+        <i class="fa-solid fa-check-circle"></i>
+        <span>پیام سیستم</span>
+    </div>
+
+    <script>
+        /**
+         * Nexus MTProto Engine
+         * Core Logic + Three.js Wave Effect Integration
+         */
+
+        const CHANNELS = [
+            'ProxyHagh',
+            'mtpproxyirani',
+            'darkproxy',
+            'iMTProto',
+            'Chrome_Proxy'
+        ];
+
+        const CORS_PROXY = 'https://api.allorigins.win/get?url=';
+        const grid = document.getElementById('grid');
+        const countDisplay = document.getElementById('count-display');
+        const refreshIcon = document.getElementById('refresh-icon');
+        const toastEl = document.getElementById('toast');
+
+        // --- 1. Three.js Background Wave System (Based on provided code) ---
+        
+        // Helper to create textures programmatically (since we don't have external images)
+        function createTexture(color, lineColor) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, 512, 512);
+            
+            ctx.strokeStyle = lineColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            // Draw grid
+            for(let i=0; i<=512; i+=64) {
+                ctx.moveTo(i, 0); ctx.lineTo(i, 512);
+                ctx.moveTo(0, i); ctx.lineTo(512, i);
+            }
+            ctx.stroke();
+            
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // Initialize Scene
+        var scene = new THREE.Scene();
+        let aspect = window.innerWidth / window.innerHeight;
+        let camera_distance = 8;
+        const camera = new THREE.OrthographicCamera(
+          -camera_distance * aspect,
+          camera_distance * aspect,
+          camera_distance,
+          -camera_distance,
+          0.01,
+          1000
+        );
+
+        camera.position.set(0, -5, 10); // Adjusted position for better background angle
+        camera.lookAt(0, 0, 0);
+
+        var renderer = new THREE.WebGLRenderer({ 
+            canvas: document.getElementById('three-canvas'),
+            antialias: true,
+            alpha: true 
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        scene.background = new THREE.Color(0x050505); // Match body bg
+
+        // Generate Textures
+        const texture = createTexture('#0a0a0a', 'rgba(0, 243, 255, 0.1)'); // Dark grid
+        const shadow_texture = createTexture('rgba(0,0,0,0)', 'rgba(0,0,0,0)'); // Transparent shadow
+
+        // Invisible sphere for tracking mouse
+        const geometry_sphere = new THREE.SphereGeometry(0.25, 32, 16);
+        const material_sphere = new THREE.MeshBasicMaterial({
+          color: 0xff0000,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false
+        });
+        const sphere = new THREE.Mesh(geometry_sphere, material_sphere);
+        scene.add(sphere);
+
+        // Hit plane
+        var geometry_hit = new THREE.PlaneGeometry(500, 500, 10, 10);
+        const material_hit = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false
+        });
+        var hit = new THREE.Mesh(geometry_hit, material_hit);
+        hit.name = "hit";
+        scene.add(hit);
+
+        // Main Wave Plane
+        var geometry = new THREE.PlaneGeometry(15, 15, 100, 100);
+        let shader_material = new THREE.ShaderMaterial({
+          uniforms: {
+            uTexture: { type: "t", value: texture },
+            uDisplacement: { value: new THREE.Vector3(0, 0, 0) }
+          },
+
+          vertexShader: `
+          varying vec2 vUv;
+          uniform vec3 uDisplacement;
+          
+          float easeInOutCubic(float x) {
+            return x < 0.5 ? 4. * x * x * x : 1. - pow(-2. * x + 2., 3.) / 2.;
+          }
+
+          float map(float value, float min1, float max1, float min2, float max2) {
+            return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
+          }  
+
+          void main() {
+           vUv = uv;
+           vec3 new_position = position; 
+        
+            vec4 localPosition = vec4( position, 1.);
+            vec4 worldPosition = modelMatrix * localPosition;
+
+            float dist = (length(uDisplacement - worldPosition.rgb));
+            float min_distance = 3.;
+
+            if (dist < min_distance){
+              float distance_mapped = map(dist, 0., min_distance, 1., 0.);
+              float val = easeInOutCubic(distance_mapped) * 1.; 
+              new_position.z +=  val;
+            }
+            
+           
+           gl_Position = projectionMatrix * modelViewMatrix * vec4(new_position,1.0);
+          }
+        `,
+          fragmentShader: ` 
+            varying vec2 vUv;
+            uniform sampler2D uTexture;
+            void main()
+            {
+               vec4 color =  texture2D(uTexture, vUv); 
+               gl_FragColor = vec4(color) ;    
+            }`,
+          transparent: true,
+          depthWrite: false,
+          side: THREE.DoubleSide
+        });
+
+        var plane = new THREE.Mesh(geometry, shader_material);
+        plane.rotation.z = Math.PI / 4;
+        scene.add(plane);
+
+        // Shadow Plane
+        let shader_material_shadow = new THREE.ShaderMaterial({
+          uniforms: {
+            uTexture: {
+              type: "t",
+              value: shadow_texture
+            },
+            uDisplacement: { value: new THREE.Vector3(0, 0, 0) }
+          },
+
+          vertexShader: `
+          varying vec2 vUv;
+          varying float dist;
+          uniform vec3 uDisplacement;
+
+          void main() {
+           vUv = uv;
+           
+           vec4 localPosition = vec4( position, 1.);
+           vec4 worldPosition = modelMatrix * localPosition;
+           dist = (length(uDisplacement - worldPosition.rgb));
+           
+           gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+          }
+        `,
+          fragmentShader: ` 
+            varying vec2 vUv;
+            varying float dist;
+            uniform sampler2D uTexture;
+            
+            float map(float value, float min1, float max1, float min2, float max2) {
+          return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
+        }  
+
+            void main()
+            {
+               vec4 color =  texture2D(uTexture, vUv); 
+               float min_distance = 3.;
+
+               if (dist < min_distance){
+                float alpha = map(dist, min_distance, 0., color.a , 0.);
+                color.a  = alpha;
+                }
+               
+               gl_FragColor = vec4(color) ;    
+            }`,
+          transparent: true,
+          depthWrite: false,
+          side: THREE.DoubleSide
+        });
+
+        var plane_shadow = new THREE.Mesh(geometry, shader_material_shadow);
+        plane_shadow.rotation.z = Math.PI / 4;
+        scene.add(plane_shadow);
+
+        // Listeners
+        window.addEventListener("resize", onWindowResize);
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        window.addEventListener("pointermove", onPointerMove);
+
+        function onPointerMove(event) {
+          pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+          pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+          raycaster.setFromCamera(pointer, camera);
+          const intersects = raycaster.intersectObject(hit);
+
+          if (intersects.length > 0) {
+            sphere.position.set(
+              intersects[0].point.x,
+              intersects[0].point.y,
+              intersects[0].point.z
+            );
+
+            shader_material.uniforms.uDisplacement.value = sphere.position;
+            shader_material_shadow.uniforms.uDisplacement.value = sphere.position;
+          }
+          
+          // Subtle tilt of the app container based on mouse position
+          const container = document.querySelector('.app-container');
+          if(container) {
+             const rotateX = (pointer.y * 5); // Inverted logic for intuitive feel
+             const rotateY = (pointer.x * -5);
+             container.style.transform = `perspective(1000px) rotateX(${5 + rotateX}deg) rotateY(${-2 + rotateY}deg)`;
+          }
+        }
+
+        function render() {
+          requestAnimationFrame(render);
+          renderer.render(scene, camera);
+        }
+        render();
+
+        function onWindowResize() {
+          aspect = window.innerWidth / window.innerHeight;
+
+          camera.left = -camera_distance * aspect;
+          camera.right = camera_distance * aspect;
+          camera.top = camera_distance;
+          camera.bottom = -camera_distance;
+
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+
+        // --- 2. Main Proxy Logic (Unchanged functionality) ---
+
+        async function fetchProxies() {
+            // UI State: Loading
+            grid.innerHTML = '<div class="loader-container"><div class="cyber-loader"></div></div>';
+            refreshIcon.style.animation = 'spin 1s linear infinite';
+            
+            let allProxies = [];
+
+            try {
+                // Fetch all channels in parallel
+                const promises = CHANNELS.map(channel => fetchChannelData(channel));
+                const results = await Promise.all(promises);
+
+                // Flatten and Process
+                results.forEach((data, index) => {
+                    if (data) {
+                        data.forEach(link => {
+                            allProxies.push({
+                                url: link,
+                                source: CHANNELS[index],
+                                id: link.substring(link.indexOf('secret=')+7, link.indexOf('secret=')+20) // Partial ID for uniqueness
+                            });
+                        });
+                    }
+                });
+
+                // Deduplicate
+                const uniqueProxies = [];
+                const seen = new Set();
+                allProxies.forEach(p => {
+                    if (!seen.has(p.url)) {
+                        seen.add(p.url);
+                        uniqueProxies.push(p);
+                    }
+                });
+
+                // Render
+                renderProxies(uniqueProxies);
+                showToast(`${uniqueProxies.length} پروکسی MTProto استخراج شد`, 'success');
+
+            } catch (error) {
+                console.error(error);
+                grid.innerHTML = `<div style="text-align:center; grid-column:1/-1; padding:2rem; color:var(--neon-secondary);">
+                    <i class="fa-solid fa-triangle-exclamation"></i> خطا در اتصال به سرورها
+                </div>`;
+                showToast('خطا در دریافت اطلاعات', 'error');
+            } finally {
+                refreshIcon.style.animation = 'none';
+            }
+        }
+
+        async function fetchChannelData(channelName) {
+            const targetUrl = `https://t.me/s/${channelName}`;
+            const proxyUrl = CORS_PROXY + encodeURIComponent(targetUrl);
+
+            try {
+                const response = await fetch(proxyUrl);
+                const json = await response.json();
+                const html = json.contents;
+
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                // Specific Parser for MTProto Links
+                // We look for href starting with tg://proxy
+                const links = [];
+                const anchors = doc.querySelectorAll('a[href^="tg://proxy"]');
+                
+                anchors.forEach(a => {
+                    links.push(a.getAttribute('href'));
+                });
+
+                // Fallback: sometimes links are in plain text inside buttons
+                if (links.length === 0) {
+                    const textContent = doc.body.innerText;
+                    const regex = /(tg:\/\/proxy\?[^\s<>"]+)/g;
+                    const matches = textContent.match(regex);
+                    if (matches) links.push(...matches);
+                }
+
+                return links;
+
+            } catch (e) {
+                console.warn(`Skipped ${channelName} due to error`);
+                return [];
+            }
+        }
+
+        function renderProxies(proxies) {
+            grid.innerHTML = '';
+            countDisplay.innerText = proxies.length;
+
+            proxies.forEach((proxy, index) => {
+                const card = document.createElement('div');
+                card.className = 'mtproto-card anim-entry';
+                card.style.animationDelay = `${index * 0.05}s`; // Staggered animation
+
+                // Construct the HTML
+                // Link is "Text-Link" named "MTProto" as requested
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span class="source-badge"><i class="fa-brands fa-telegram"></i> ${proxy.source}</span>
+                        <span style="font-family: monospace; opacity: 0.5">#${proxy.id.substring(0,4)}</span>
+                    </div>
+                    
+                    <a href="${proxy.url}" class="mtproto-link-btn" onclick="handleClick(event, '${proxy.url}')">
+                        MTProto <i class="fa-solid fa-bolt"></i>
+                    </a>
+                    
+                    <div class="card-actions">
+                        <i class="fa-regular fa-copy action-icon copy-trigger" onclick="copyLink('${proxy.url}')" title="کپی لینک"></i>
+                        <i class="fa-solid fa-shield-halved action-icon" title="وضعیت ناشناس" style="color: var(--neon-primary);"></i>
+                        <i class="fa-solid fa-share-nodes action-icon" title="پینگ" style="font-size: 0.7em; margin-top: 4px;"></i>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // --- 3. Interactions ---
+
+        // Override click to ensure user knows what's happening, 
+        // though direct href="tg://..." works best on mobile/installed apps
+        window.handleClick = (e, url) => {
+            // For desktop without Telegram installed, tg:// won't work nicely.
+            // But user requested "Click opens Telegram".
+            // Let's keep default behavior but log/feedback visually.
+            const btn = e.currentTarget;
+            btn.innerHTML = `CONNECTING...`;
+            setTimeout(() => {
+                btn.innerHTML = `MTProto <i class="fa-solid fa-bolt"></i>`;
+            }, 1000);
+        };
+
+        window.copyLink = (text) => {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('لینک پروتکل در کلیپبورد کپی شد', 'success');
+            });
+        };
+
+        function showToast(msg, type) {
+            toastEl.querySelector('span').innerText = msg;
+            const icon = toastEl.querySelector('i');
+            icon.className = type === 'success' ? 'fa-solid fa-check-circle' : 'fa-solid fa-triangle-exclamation';
+            
+            toastEl.classList.add('show');
+            setTimeout(() => {
+                toastEl.classList.remove('show');
+            }, 3000);
+        }
+
+        // --- Init ---
+        fetchProxies();
+
+    </script>
+</body>
+</html>
